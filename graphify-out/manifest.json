@@ -18,9 +18,9 @@
     "semantic_hash": "41eb651ed31b64d58222b6690a9c2d8d"
   },
   "HailUninstaller.ps1": {
-    "mtime": 1792299993.0285451,
-    "seen": 1792300361.5059953,
-    "ast_hash": "fc77c0ffd181389cfe6e8666ff49c639",
+    "mtime": 1794147626.9760027,
+    "seen": 1794147783.4094086,
+    "ast_hash": "e26053b9475798cc4a0fe3326fc19f9e",
     "semantic_hash": ""
   },
   "Modules/Applications.ps1": {
@@ -168,15 +168,15 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1792303806.4950268,
-    "seen": 1792303892.3139684,
-    "ast_hash": "889b2077b741272e6516779366e8c769",
+    "mtime": 1794147651.4286437,
+    "seen": 1794147783.4094522,
+    "ast_hash": "b63d3faabe4cee239a62023e47ea022c",
     "semantic_hash": ""
   },
   "Website/index.html": {
-    "mtime": 1792303271.7434566,
-    "seen": 1792303311.8671365,
-    "ast_hash": "e2c1add6ed69889f330735a8d8c5ccf3",
+    "mtime": 1794147701.2079153,
+    "seen": 1794147783.4094534,
+    "ast_hash": "cd5d5fbfaedfeb6a46f986b702f33b12",
     "semantic_hash": ""
   },
   "Website/assets/logo.png": {
@@ -186,15 +186,15 @@
     "semantic_hash": ""
   },
   "Config/Releases.json": {
-    "mtime": 1792303845.2926424,
-    "seen": 1792303892.3139234,
-    "ast_hash": "b927932e280f3f3f52cc93538c34c47f",
+    "mtime": 1794147731.4988048,
+    "seen": 1794147783.4094043,
+    "ast_hash": "445f31ccb8c3dded250549306b79b3c7",
     "semantic_hash": ""
   },
   "Tests/Bootstrap.Tests.ps1": {
-    "mtime": 1792302849.0204396,
-    "seen": 1792302901.5703514,
-    "ast_hash": "fc602d9926138a6a1f8ac36702494492",
+    "mtime": 1794147707.9696796,
+    "seen": 1794147783.409438,
+    "ast_hash": "ae3872d23a13332c8ea500fc2dc80a06",
     "semantic_hash": ""
   },
   "Tools/New-ReleasePackage.ps1": {
@@ -204,9 +204,9 @@
     "semantic_hash": ""
   },
   "bootstrap.ps1": {
-    "mtime": 1792303861.1564434,
-    "seen": 1792303892.3139644,
-    "ast_hash": "ce35b59476daafaf03124871a96cb90f",
+    "mtime": 1794147738.638006,
+    "seen": 1794147783.4094486,
+    "ast_hash": "515baf0e68f768cba170e221d7594dc7",
     "semantic_hash": ""
   },
   ".github/workflows/ci.yml": {

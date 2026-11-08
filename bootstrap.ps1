@@ -26,13 +26,13 @@
     Displays help and usage documentation.
 .EXAMPLE
     # One-line execution from web:
-    irm "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.ps1" | iex
+    irm "https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/bootstrap.ps1" | iex
 
     # Run diagnostics:
-    & { $(irm "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.ps1") } -Diagnostic
+    & { $(irm "https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/bootstrap.ps1") } -Diagnostic
 
     # Dry-run verification:
-    & { $(irm "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.ps1") } -DryRun
+    & { $(irm "https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/bootstrap.ps1") } -DryRun
 #>
 [CmdletBinding()]
 param(
@@ -58,13 +58,13 @@ $script:KnownReleases = @{
     "0.0.1" = @{
         Version     = "0.0.1"
         ArchiveName = "HailUninstaller-v0.0.1.zip"
-        Sha256      = "0F1DB041CFFBA78C3D5D52A0F9AA5F94C0A3CC3BEE025BCB3EFD1439F29DBCF1"
+        Sha256      = "3EBECBB92219822FA26401EF1FEDA8300B000D3C2A5C03C2D92F19D593BD2388"
         MinPS       = "5.1"
         MinOS       = "10.0"
     }
 }
 
-$script:DefaultRepository = "Suvesh108/HailUninstaller"
+$script:DefaultRepository = "bytebldr/HailUninstaller"
 $script:DefaultReleaseBaseUrl = "https://github.com/$($script:DefaultRepository)/releases/download"
 $script:DefaultRawBaseUrl = "https://raw.githubusercontent.com/$($script:DefaultRepository)/main"
 

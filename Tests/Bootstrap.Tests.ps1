@@ -170,7 +170,7 @@ Describe "HailUninstaller Bootstrap & Security Launcher" {
         }
 
         It "Handles network 404 download errors gracefully with clear fatal message" {
-            $output = & cmd.exe /c "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$($script:bootstrapScript)`" -ReleaseUrl `"https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/non_existent.zip`" -ForceUpdate 2>&1"
+            $output = & cmd.exe /c "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$($script:bootstrapScript)`" -ReleaseUrl `"https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/non_existent.zip`" -ForceUpdate 2>&1"
             $outputStr = ($output | Out-String)
 
             $outputStr | Should -Match "Failed to download or deploy"

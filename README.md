@@ -6,7 +6,7 @@
 
   ### Deep Application Removal & Ghost Storage Footprint Purge for Windows
 
-  [![GitHub Release](https://img.shields.io/badge/Release-v0.0.1-0078D6?style=for-the-badge&logo=github)](https://github.com/Suvesh108/HailUninstaller/releases)
+  [![GitHub Release](https://img.shields.io/badge/Release-v0.0.1-0078D6?style=for-the-badge&logo=github)](https://github.com/bytebldr/HailUninstaller/releases)
   [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%20%7C%207%2B-5391FE?style=for-the-badge&logo=powershell&logoColor=white)](https://microsoft.com/powershell)
   [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011%20%7C%20Server-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://microsoft.com/windows)
   [![Integrity](https://img.shields.io/badge/Integrity-SHA--256%20Verified-brightgreen?style=for-the-badge&logo=shield&logoColor=white)]()
@@ -29,7 +29,7 @@
 Launch HailUninstaller immediately in Windows PowerShell without manually downloading or managing files:
 
 ```powershell
-irm "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.ps1" | iex
+irm "https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/bootstrap.ps1" | iex
 ```
 
 > **Note**: HailUninstaller operates cleanly in user space for diagnostics and scanning. When purging system-wide software or protected Program Files directories, launch PowerShell as Administrator or provide the `-Elevate` switch.
@@ -38,21 +38,21 @@ irm "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.
 
 ```powershell
 # Run system compatibility, TLS 1.2+, and cryptographic security diagnostics
-& { $(irm "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.ps1") } -Diagnostic
+& { $(irm "https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/bootstrap.ps1") } -Diagnostic
 
 # Dry-run simulation (verifies environment and artifact signatures without writing to disk)
-& { $(irm "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.ps1") } -DryRun
+& { $(irm "https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/bootstrap.ps1") } -DryRun
 
 # Display launcher options and help
-& { $(irm "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.ps1") } -Help
+& { $(irm "https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/bootstrap.ps1") } -Help
 
 # Force re-download and cryptographic re-verification of the cached release
-& { $(irm "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.ps1") } -ForceUpdate
+& { $(irm "https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/bootstrap.ps1") } -ForceUpdate
 
 # Forward CLI commands directly through the launcher
-& { $(irm "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.ps1") } -List
-& { $(irm "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.ps1") } -Scan "Discord"
-& { $(irm "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.ps1") } -Orphans
+& { $(irm "https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/bootstrap.ps1") } -List
+& { $(irm "https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/bootstrap.ps1") } -Scan "Discord"
+& { $(irm "https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/bootstrap.ps1") } -Orphans
 ```
 
 ---

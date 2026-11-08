@@ -81,7 +81,7 @@ if (-not $hasLocalModules) {
     Write-Host "[HailUninstaller] Web/Standalone execution detected (local modules not present)." -ForegroundColor Cyan
     Write-Host "[HailUninstaller] Delegating to official secure bootstrap launcher..." -ForegroundColor Gray
     
-    $bootstrapUri = "https://raw.githubusercontent.com/Suvesh108/HailUninstaller/main/bootstrap.ps1"
+    $bootstrapUri = "https://raw.githubusercontent.com/bytebldr/HailUninstaller/main/bootstrap.ps1"
     try {
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls13
     } catch {
