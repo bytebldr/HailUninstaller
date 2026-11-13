@@ -78,7 +78,9 @@ function New-CleanupBackup {
             Type           = $item.Type
             OriginalPath   = $item.Path
             Name           = $item.Name
-            ValueName      = $item.ValueName
+            ValueName      = if ($item.ValueName) { $item.ValueName } else { "" }
+            ValueType      = ""
+            ValueData      = $null
             Size           = [long]$item.Size
             BackupLocation = ""
         }
@@ -100,17 +102,30 @@ function New-CleanupBackup {
                 Write-Warning "Failed to backup file item '$($item.Path)': $_"
             }
         } elseif ($item.Category -eq "Registry") {
+            # Strip PowerShell provider prefixes at source
+            $rawRegPath = $item.Path -replace '^(?:Microsoft\.PowerShell\.Core\\)?Registry::', ''
+            
+            # Normalize for PowerShell cmdlets (Get-ItemProperty, Get-Item)
+            $psRegPath = $rawRegPath
+            if ($psRegPath -notmatch '^[A-Za-z]+:\\') {
+                $psRegPath = $psRegPath -replace '^HKEY_LOCAL_MACHINE\\?', 'HKLM:\' `
+                                        -replace '^HKEY_CURRENT_USER\\?', 'HKCU:\' `
+                                        -replace '^HKEY_CLASSES_ROOT\\?', 'HKCR:\' `
+                                        -replace '^HKEY_USERS\\?', 'HKU:\' `
+                                        -replace '^HKEY_CURRENT_CONFIG\\?', 'HKCC:\'
+            }
+
             if ($item.Type -eq "Value" -and $item.ValueName) {
                 try {
-                    $propVal = (Get-ItemProperty -LiteralPath $item.Path -Name $item.ValueName -ErrorAction SilentlyContinue).$($item.ValueName)
+                    $propVal = (Get-ItemProperty -LiteralPath $psRegPath -Name $item.ValueName -ErrorAction SilentlyContinue).$($item.ValueName)
                     $valKind = "String"
                     try {
-                        $rk = Get-Item -LiteralPath $item.Path -ErrorAction SilentlyContinue
+                        $rk = Get-Item -LiteralPath $psRegPath -ErrorAction SilentlyContinue
                         if ($rk) { $valKind = $rk.GetValueKind($item.ValueName).ToString() }
                     } catch { }
                     $manifestEntry.BackupLocation = "MANIFEST_VALUE"
-                    $manifestEntry | Add-Member -MemberType NoteProperty -Name "ValueType" -Value $valKind -Force
-                    $manifestEntry | Add-Member -MemberType NoteProperty -Name "ValueData" -Value $propVal -Force
+                    $manifestEntry.ValueType = $valKind
+                    $manifestEntry.ValueData = $propVal
                 } catch {
                     Write-Warning "Failed to capture registry value '$($item.Path)\$($item.ValueName)': $_"
                 }
@@ -118,10 +133,13 @@ function New-CleanupBackup {
                 $regIndex++
                 $regFile = Join-Path $regDir "reg_$regIndex.reg"
                 try {
-                    # Strip PowerShell provider prefix and convert to native reg path
-                    $cleanPath = $item.Path -replace '^Microsoft\.PowerShell\.Core\\Registry::', ''
-                    $nativeReg = $cleanPath -replace '^HKLM:\\?', 'HKEY_LOCAL_MACHINE\' `
-                                            -replace '^HKCU:\\?', 'HKEY_CURRENT_USER\'
+                    # Convert to native registry hive format for reg.exe export
+                    $nativeReg = $rawRegPath -replace '^(?:HKLM|HKEY_LOCAL_MACHINE)[:\\]+', 'HKEY_LOCAL_MACHINE\' `
+                                            -replace '^(?:HKCU|HKEY_CURRENT_USER)[:\\]+', 'HKEY_CURRENT_USER\' `
+                                            -replace '^(?:HKCR|HKEY_CLASSES_ROOT)[:\\]+', 'HKEY_CLASSES_ROOT\' `
+                                            -replace '^(?:HKU|HKEY_USERS)[:\\]+', 'HKEY_USERS\' `
+                                            -replace '^(?:HKCC|HKEY_CURRENT_CONFIG)[:\\]+', 'HKEY_CURRENT_CONFIG\'
+                    $nativeReg = $nativeReg.TrimEnd('\')
                     
                     $p = Start-Process -FilePath "reg.exe" -ArgumentList "export `"$nativeReg`" `"$regFile`" /y" -Wait -PassThru -WindowStyle Hidden
                     if ($p.ExitCode -eq 0 -and (Test-Path -LiteralPath $regFile)) {

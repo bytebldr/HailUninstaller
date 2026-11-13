@@ -25,16 +25,16 @@
 
 [CmdletBinding(DefaultParameterSetName = "Interactive")]
 param(
-    [Parameter(ParameterSetName = "List")]
+    [Parameter(Mandatory = $true, ParameterSetName = "List")]
     [switch]$List,
 
-    [Parameter(ParameterSetName = "Scan")]
+    [Parameter(Mandatory = $true, ParameterSetName = "Scan")]
     [string]$Scan,
 
-    [Parameter(ParameterSetName = "DeepScan")]
+    [Parameter(Mandatory = $true, ParameterSetName = "DeepScan")]
     [string]$DeepScan,
 
-    [Parameter(ParameterSetName = "Uninstall")]
+    [Parameter(Mandatory = $true, ParameterSetName = "Uninstall")]
     [string]$Uninstall,
 
     [Parameter(ParameterSetName = "Uninstall")]
@@ -47,20 +47,20 @@ param(
     [Parameter(ParameterSetName = "Batch")]
     [switch]$CreateBackup,
 
-    [Parameter(ParameterSetName = "Restore")]
+    [Parameter(Mandatory = $true, ParameterSetName = "Restore")]
     [string]$Restore,
 
-    [Parameter(ParameterSetName = "Orphans")]
+    [Parameter(Mandatory = $true, ParameterSetName = "Orphans")]
     [Alias("Orphans")]
     [switch]$ScanOrphans,
 
-    [Parameter(ParameterSetName = "Forced")]
+    [Parameter(Mandatory = $true, ParameterSetName = "Forced")]
     [string]$Forced,
 
-    [Parameter(ParameterSetName = "Hunter")]
+    [Parameter(Mandatory = $true, ParameterSetName = "Hunter")]
     [switch]$Hunter,
 
-    [Parameter(ParameterSetName = "Batch")]
+    [Parameter(Mandatory = $true, ParameterSetName = "Batch")]
     [string[]]$Batch,
 
     [switch]$Cli,
@@ -330,8 +330,23 @@ if ($Uninstall) {
 # ==========================================
 
 if (-not $Cli) {
-    Show-HailUninstallerGUI -ConfigDir $ConfigDir
-    exit 0
+    $isHeadless = $false
+    try {
+        if (-not [System.Environment]::UserInteractive) {
+            $isHeadless = $true
+        }
+    } catch { }
+
+    if (-not $isHeadless) {
+        try {
+            Show-HailUninstallerGUI -ConfigDir $ConfigDir
+            exit 0
+        } catch {
+            Write-Warning "GUI presentation failed ($($_.Exception.Message)). Falling back to interactive CLI."
+        }
+    } else {
+        Write-Host "Non-interactive or headless environment detected. Falling back to interactive CLI." -ForegroundColor Yellow
+    }
 }
 
 # ==========================================

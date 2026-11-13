@@ -13,8 +13,8 @@ function Detect-InstallerType {
     $raw = $UninstallString.Trim()
 
     # 1. Windows Installer / MSI detection
-    if ($raw -match '(?<guid>\{[A-F0-9]{8}\-[A-F0-9]{4}\-[A-F0-9]{4}\-[A-F0-9]{4}\-[A-F0-9]{12}\})') {
-        $guid = $matches['guid']
+    if ($raw -match '(\{[A-Fa-f0-9]{8}\-[A-Fa-f0-9]{4}\-[A-Fa-f0-9]{4}\-[A-Fa-f0-9]{4}\-[A-Fa-f0-9]{12}\})') {
+        $guid = $matches[1]
         return [PSCustomObject]@{
             InstallerType   = "MSI"
             QuietSwitches   = "/qn /norestart"
@@ -36,7 +36,7 @@ function Detect-InstallerType {
     $exePath = ""
     if ($raw -match '^"([^"]+)"') {
         $exePath = $matches[1]
-    } elseif ($raw -match '^(.*?\.(?:exe|bat|cmd))\b') {
+    } elseif ($raw -match '^(.*?\.(?:exe|bat|cmd))\b\s*(.*)$') {
         $exePath = $matches[1]
     } else {
         $exePath = ($raw -split '\s+')[0]
@@ -144,8 +144,8 @@ function Build-QuietUninstallCommand {
     }
 
     # 2. If MSI package
-    if ($raw -match '(?<guid>\{[A-F0-9\-]{36}\})') {
-        $guid = $matches['guid']
+    if ($raw -match '(\{[A-Fa-f0-9]{8}\-[A-Fa-f0-9]{4}\-[A-Fa-f0-9]{4}\-[A-Fa-f0-9]{4}\-[A-Fa-f0-9]{12}\})') {
+        $guid = $matches[1]
         return [PSCustomObject]@{
             Executable  = "msiexec.exe"
             Arguments   = "/x $guid /qn /norestart"

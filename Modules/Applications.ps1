@@ -173,9 +173,10 @@ function Invoke-NativeUninstall {
             return $true
         }
 
-        # Check for MsiExec
-        if ($cmd -match '(?<guid>\{[A-F0-9\-]{36}\})') {
-            $guid = $matches['guid']
+        # Check for MsiExec - extract GUID directly
+        if ($cmd -match '(\{[A-Fa-f0-9]{8}\-[A-Fa-f0-9]{4}\-[A-Fa-f0-9]{4}\-[A-Fa-f0-9]{4}\-[A-Fa-f0-9]{12}\})' -or 
+            ($Application.Type -eq "MSI" -and $Application.Id -match '(\{[A-Fa-f0-9]{8}\-[A-Fa-f0-9]{4}\-[A-Fa-f0-9]{4}\-[A-Fa-f0-9]{4}\-[A-Fa-f0-9]{12}\})')) {
+            $guid = $matches[1]
             $args = "/x $guid"
             if ($Quiet) { $args += " /qn /norestart" }
             $proc = Start-Process -FilePath "msiexec.exe" -ArgumentList $args -Wait -PassThru

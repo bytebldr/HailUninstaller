@@ -1,4 +1,4 @@
-# Modules/GUI.ps1
+﻿# Modules/GUI.ps1
 # Windows 11 Fluent WPF GUI v0.0.1 for HailUninstaller
 # Features:
 # - Zero-freeze Asynchronous Runspace Execution Engine (60 FPS responsiveness)
@@ -793,7 +793,11 @@ function Show-HailUninstallerGUI {
     $script:activeTab = "Orphans"
     $script:originTab = "Orphans"
     $script:allOrphans = [System.Collections.ObjectModel.ObservableCollection[PSCustomObject]]::new()
-    $script:allInstalledApps = @()
+    $script:allInstalledApps = [System.Collections.ObjectModel.ObservableCollection[PSCustomObject]]::new()
+    $script:allHunterProcesses = [System.Collections.ObjectModel.ObservableCollection[PSCustomObject]]::new()
+    $lstOrphans.ItemsSource = $script:allOrphans
+    $lstApps.ItemsSource = $script:allInstalledApps
+    $lstHunter.ItemsSource = $script:allHunterProcesses
     $script:currentLeftoverItems = @()
     $script:activeTargetApp = $null
     $script:latestBackupId = ""
@@ -968,6 +972,7 @@ function Show-HailUninstallerGUI {
             Runspace = $ps
             Handle   = $asyncHandle
             Queue    = $queue
+            Disposed = $false
         }
         $guiAsyncState.ActiveJobs.Add($jobRecord)
 
@@ -975,10 +980,10 @@ function Show-HailUninstallerGUI {
         $sharedJobs = $guiAsyncState.ActiveJobs
         $sharedTasks = $guiAsyncState.RunningTasks
         $taskKey = $TaskName
-        $isFinished = $false
+        $jobState = [hashtable]::Synchronized(@{ Finished = $false })
 
         $tickAction = {
-            if ($isFinished) { return }
+            if ($jobState.Finished) { return }
 
             try {
                 # Drain queue and stream events
@@ -992,18 +997,20 @@ function Show-HailUninstallerGUI {
                 }
 
                 if ($asyncHandle -and $asyncHandle.IsCompleted) {
-                    $isFinished = $true
+                    $jobState.Finished = $true
                     $pollTimer.Stop()
 
                     try {
-                        $res = $ps.EndInvoke($asyncHandle)
-                        if ($ps.Streams.Error.Count -gt 0) {
-                            foreach ($err in $ps.Streams.Error) {
-                                Log-GuiConsole -Tag "WARN" -Message "Worker stream: $err" -Color Yellow
+                        if ($ps -and -not $jobRecord.Disposed) {
+                            $res = $ps.EndInvoke($asyncHandle)
+                            if ($ps.Streams.Error.Count -gt 0) {
+                                foreach ($err in $ps.Streams.Error) {
+                                    Log-GuiConsole -Tag "WARN" -Message "Worker stream: $err" -Color Yellow
+                                }
                             }
-                        }
-                        if ($OnComplete) {
-                            & $OnComplete $res
+                            if ($OnComplete) {
+                                & $OnComplete $res
+                            }
                         }
                     } catch {
                         Log-GuiConsole -Tag "ERROR" -Message "Async background error: $_" -Color Red
@@ -1011,7 +1018,9 @@ function Show-HailUninstallerGUI {
                             & $OnError $_
                         }
                     } finally {
-                        try { $ps.Dispose() } catch { }
+                        $jobRecord.Disposed = $true
+                        try { if ($ps) { $ps.Dispose() } } catch { }
+                        $ps = $null
                         try { $sharedJobs.Remove($jobRecord) | Out-Null } catch { }
                         try { $sharedTasks.Remove($taskKey) | Out-Null } catch { }
 
@@ -1025,10 +1034,12 @@ function Show-HailUninstallerGUI {
                     }
                 }
             } catch {
-                $isFinished = $true
+                $jobState.Finished = $true
                 $pollTimer.Stop()
                 Log-GuiConsole -Tag "ERROR" -Message "Timer tick exception: $_" -Color Red
-                try { $ps.Dispose() } catch { }
+                $jobRecord.Disposed = $true
+                try { if ($ps) { $ps.Dispose() } } catch { }
+                $ps = $null
                 try { $sharedJobs.Remove($jobRecord) | Out-Null } catch { }
                 try { $sharedTasks.Remove($taskKey) | Out-Null } catch { }
 
@@ -1129,6 +1140,10 @@ function Show-HailUninstallerGUI {
             if ($pnlScanPrompt) { $pnlScanPrompt.Visibility = [System.Windows.Visibility]::Collapsed }
             $lstOrphans.Visibility = [System.Windows.Visibility]::Visible
             $lstOrphans.ItemsSource = $script:allOrphans
+            try {
+                $view = [System.Windows.Data.CollectionViewSource]::GetDefaultView($lstOrphans.ItemsSource)
+                if ($view) { $view.Refresh() }
+            } catch { }
 
             $btnSelectHigh.IsEnabled = $true
             $btnSelectAll.IsEnabled = $true
@@ -1161,7 +1176,18 @@ function Show-HailUninstallerGUI {
 
     # Load Installed Applications (Async)
     $loadInstalledApps = {
-        if ($script:allInstalledApps.Count -gt 0 -or $guiAsyncState.RunningTasks.Contains("LoadInstalledApps")) { return }
+        param([switch]$Force)
+        if (-not $Force -and $script:allInstalledApps.Count -gt 0) {
+            if ($lstApps.ItemsSource -ne $script:allInstalledApps) {
+                $lstApps.ItemsSource = $script:allInstalledApps
+            }
+            try {
+                $view = [System.Windows.Data.CollectionViewSource]::GetDefaultView($lstApps.ItemsSource)
+                if ($view) { $view.Refresh() }
+            } catch { }
+            return
+        }
+        if ($guiAsyncState.RunningTasks.Contains("LoadInstalledApps")) { return }
 
         Log-GuiConsole -Tag "APP" -Message "Loading installed applications and AppX/MSIX packages..." -Color Blue
         $txtBottomSummary.Text = "Discovering installed software..."
@@ -1174,14 +1200,22 @@ function Show-HailUninstallerGUI {
 
         $onComplete = {
             param($apps)
-            $script:allInstalledApps = @($apps | ForEach-Object {
-                if ($_ -and $_.PSObject.Properties['Selected'] -eq $null) {
-                    $_ | Add-Member -MemberType NoteProperty -Name "Selected" -Value $false -PassThru
-                } else {
-                    $_
+            $script:allInstalledApps.Clear()
+            if ($apps) {
+                foreach ($app in $apps) {
+                    if ($app) {
+                        if ($app.PSObject.Properties['Selected'] -eq $null) {
+                            $app | Add-Member -MemberType NoteProperty -Name "Selected" -Value $false
+                        }
+                        $script:allInstalledApps.Add($app)
+                    }
                 }
-            })
+            }
             $lstApps.ItemsSource = $script:allInstalledApps
+            try {
+                $view = [System.Windows.Data.CollectionViewSource]::GetDefaultView($lstApps.ItemsSource)
+                if ($view) { $view.Refresh() }
+            } catch { }
             $txtBottomSummary.Text = "$($script:allInstalledApps.Count) applications loaded. Select an app to uninstall or deep scan."
             Log-GuiConsole -Tag "APP" -Message "Successfully loaded $($script:allInstalledApps.Count) installed applications." -Color Green
         }
@@ -1211,7 +1245,17 @@ function Show-HailUninstallerGUI {
 
         $onComplete = {
             param($targets)
-            $lstHunter.ItemsSource = @($targets)
+            $script:allHunterProcesses.Clear()
+            if ($targets) {
+                foreach ($t in $targets) {
+                    $script:allHunterProcesses.Add($t)
+                }
+            }
+            $lstHunter.ItemsSource = $script:allHunterProcesses
+            try {
+                $view = [System.Windows.Data.CollectionViewSource]::GetDefaultView($lstHunter.ItemsSource)
+                if ($view) { $view.Refresh() }
+            } catch { }
             & $stopLattice $latticeHunter $cellsHunter $txtHunterIcon $txtHunterLabel $txtHunterTimer "Refresh Active Processes"
             $btnRefreshHunter.IsEnabled = $true
             Log-GuiConsole -Tag "HUNTER" -Message "Discovered $(@($targets).Count) active user target processes." -Color Green
@@ -1326,6 +1370,13 @@ function Show-HailUninstallerGUI {
         $btnClearSelection.Visibility = [System.Windows.Visibility]::Visible
         $btnNext.Content = "Scan Leftovers For App"
         $btnNext.Visibility = [System.Windows.Visibility]::Visible
+        if ($lstApps.ItemsSource -ne $script:allInstalledApps) {
+            $lstApps.ItemsSource = $script:allInstalledApps
+        }
+        try {
+            $view = [System.Windows.Data.CollectionViewSource]::GetDefaultView($lstApps.ItemsSource)
+            if ($view) { $view.Refresh() }
+        } catch { }
         & $loadInstalledApps
     })
 
@@ -1358,6 +1409,13 @@ function Show-HailUninstallerGUI {
         $btnSelectHeavy.Visibility = [System.Windows.Visibility]::Collapsed
         $btnClearSelection.Visibility = [System.Windows.Visibility]::Collapsed
         $btnNext.Visibility = [System.Windows.Visibility]::Collapsed
+        if ($lstHunter.ItemsSource -ne $script:allHunterProcesses) {
+            $lstHunter.ItemsSource = $script:allHunterProcesses
+        }
+        try {
+            $view = [System.Windows.Data.CollectionViewSource]::GetDefaultView($lstHunter.ItemsSource)
+            if ($view) { $view.Refresh() }
+        } catch { }
         & $loadHunterProcesses
         $txtBottomSummary.Text = "Inspect active processes to trace their origin and remove."
     })
@@ -1386,7 +1444,12 @@ function Show-HailUninstallerGUI {
             if ([string]::IsNullOrWhiteSpace($filter)) {
                 $lstOrphans.ItemsSource = $script:allOrphans
             } else {
-                $filtered = @($script:allOrphans | Where-Object { $_.Name -like "*$filter*" -or $_.Path -like "*$filter*" })
+                $filtered = [System.Collections.ObjectModel.ObservableCollection[PSCustomObject]]::new()
+                foreach ($item in $script:allOrphans) {
+                    if ($item.Name -like "*$filter*" -or $item.Path -like "*$filter*") {
+                        $filtered.Add($item)
+                    }
+                }
                 $lstOrphans.ItemsSource = $filtered
                 Log-GuiConsole -Tag "FILTER" -Message "Filtered orphans matching '$filter': $($filtered.Count) matches" -Color DarkGray
             }
@@ -1394,7 +1457,12 @@ function Show-HailUninstallerGUI {
             if ([string]::IsNullOrWhiteSpace($filter)) {
                 $lstApps.ItemsSource = $script:allInstalledApps
             } else {
-                $filtered = @($script:allInstalledApps | Where-Object { $_.DisplayName -like "*$filter*" -or $_.Publisher -like "*$filter*" })
+                $filtered = [System.Collections.ObjectModel.ObservableCollection[PSCustomObject]]::new()
+                foreach ($item in $script:allInstalledApps) {
+                    if ($item.DisplayName -like "*$filter*" -or $item.Publisher -like "*$filter*") {
+                        $filtered.Add($item)
+                    }
+                }
                 $lstApps.ItemsSource = $filtered
                 Log-GuiConsole -Tag "FILTER" -Message "Filtered applications matching '$filter': $($filtered.Count) matches" -Color DarkGray
             }
@@ -1498,8 +1566,8 @@ function Show-HailUninstallerGUI {
                 $window.Cursor = [System.Windows.Input.Cursors]::Arrow
                 Log-GuiConsole -Tag "UNINSTALL" -Message "Uninstaller completed for '$($app.DisplayName)'." -Color Green
             }
-            $script:allInstalledApps = @()
-            & $loadInstalledApps
+            $script:allInstalledApps.Clear()
+            & $loadInstalledApps -Force
         }
     })
 
@@ -1521,8 +1589,8 @@ function Show-HailUninstallerGUI {
                 $window.Cursor = [System.Windows.Input.Cursors]::Arrow
                 Log-GuiConsole -Tag "QUIET" -Message "Quiet uninstallation finished for '$($app.DisplayName)'." -Color Green
             }
-            $script:allInstalledApps = @()
-            & $loadInstalledApps
+            $script:allInstalledApps.Clear()
+            & $loadInstalledApps -Force
         }
     })
 
@@ -1869,6 +1937,11 @@ function Show-HailUninstallerGUI {
                 if ($pnlScanPrompt) { $pnlScanPrompt.Visibility = [System.Windows.Visibility]::Visible }
                 if ($lstOrphans) { $lstOrphans.Visibility = [System.Windows.Visibility]::Collapsed }
             }
+            & $updateOrphanSummary
+            try {
+                $view = [System.Windows.Data.CollectionViewSource]::GetDefaultView($lstOrphans.ItemsSource)
+                if ($view) { $view.Refresh() }
+            } catch { }
 
             & $switchView $viewStep3
             $txtResultStats.Text = "Freed: $(Format-Bytes $cRes.RemovedBytes) across $($cRes.RemovedCount) orphaned folder(s)!"
@@ -1976,8 +2049,9 @@ function Show-HailUninstallerGUI {
     $window.Add_Loaded({
         $txtBottomSummary.Text = "HailUninstaller v0.0.1 ready. Click 'Scan Storage Leftovers' or switch tabs."
         Log-GuiConsole -Tag "READY" -Message "HailUninstaller ready. Console log synchronized with GUI." -Color Green
-        # Preload installed software in background for instantaneous responsiveness when switching tabs
+        # Preload installed software and hunter processes in background for instantaneous responsiveness
         & $loadInstalledApps
+        & $loadHunterProcesses
     })
 
     # Launch GUI dialog

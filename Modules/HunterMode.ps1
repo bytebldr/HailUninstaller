@@ -24,6 +24,7 @@ function Get-RunningHunterTargets {
 
     $targets = [System.Collections.Generic.List[PSCustomObject]]::new()
     $seenExe = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $cimLookup = $null
 
     $procs = Get-Process -ErrorAction SilentlyContinue | Where-Object { 
         $_.Id -gt 4 -and -not $protectedProcs.Contains($_.ProcessName)
@@ -31,9 +32,38 @@ function Get-RunningHunterTargets {
 
     foreach ($proc in $procs) {
         $exePath = ""
+        # Tier 1: Try Process.MainModule.FileName
         try {
-            $exePath = $proc.MainModule.FileName
+            if ($proc.MainModule -and $proc.MainModule.FileName) {
+                $exePath = $proc.MainModule.FileName
+            }
         } catch { }
+
+        # Tier 2: Fallback to Process.Path (PS extended property)
+        if (-not $exePath) {
+            try {
+                if ($proc.Path) {
+                    $exePath = $proc.Path
+                }
+            } catch { }
+        }
+
+        # Tier 3: Fallback to CIM Win32_Process ExecutablePath
+        if (-not $exePath) {
+            try {
+                if ($null -eq $cimLookup) {
+                    $cimLookup = @{}
+                    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
+                        if ($_.ProcessId -and $_.ExecutablePath) {
+                            $cimLookup[[int]$_.ProcessId] = $_.ExecutablePath
+                        }
+                    }
+                }
+                if ($cimLookup.ContainsKey([int]$proc.Id)) {
+                    $exePath = $cimLookup[[int]$proc.Id]
+                }
+            } catch { }
+        }
 
         if (-not $exePath) { continue }
         if ($exePath -like "$env:SystemRoot\System32\*" -or $exePath -like "$env:SystemRoot\SysWOW64\*") { continue }

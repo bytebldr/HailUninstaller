@@ -58,10 +58,25 @@ function Restore-CleanupBackup {
             } elseif ($item.Category -eq "Registry") {
                 if ($item.BackupLocation -eq "MANIFEST_VALUE" -or ($item.Type -eq "Value" -and $item.ValueName)) {
                     try {
-                        if (-not (Test-Path -LiteralPath $item.OriginalPath)) {
-                            New-Item -Path $item.OriginalPath -Force -ErrorAction SilentlyContinue | Out-Null
+                        # Strip PowerShell provider prefixes and normalize for PowerShell cmdlets
+                        $rawRegPath = $item.OriginalPath -replace '^(?:Microsoft\.PowerShell\.Core\\)?Registry::', ''
+                        $psRegPath = $rawRegPath
+                        if ($psRegPath -notmatch '^[A-Za-z]+:\\') {
+                            $psRegPath = $psRegPath -replace '^HKEY_LOCAL_MACHINE\\?', 'HKLM:\' `
+                                                    -replace '^HKEY_CURRENT_USER\\?', 'HKCU:\' `
+                                                    -replace '^HKEY_CLASSES_ROOT\\?', 'HKCR:\' `
+                                                    -replace '^HKEY_USERS\\?', 'HKU:\' `
+                                                    -replace '^HKEY_CURRENT_CONFIG\\?', 'HKCC:\'
                         }
-                        Set-ItemProperty -LiteralPath $item.OriginalPath -Name $item.ValueName -Value $item.ValueData -Force -ErrorAction Stop
+
+                        if (-not (Test-Path -LiteralPath $psRegPath)) {
+                            New-Item -Path $psRegPath -Force -ErrorAction SilentlyContinue | Out-Null
+                        }
+                        if ($item.ValueType) {
+                            Set-ItemProperty -LiteralPath $psRegPath -Name $item.ValueName -Value $item.ValueData -Type $item.ValueType -Force -ErrorAction Stop
+                        } else {
+                            Set-ItemProperty -LiteralPath $psRegPath -Name $item.ValueName -Value $item.ValueData -Force -ErrorAction Stop
+                        }
                         $restoredCount++
                     } catch {
                         $failedCount++

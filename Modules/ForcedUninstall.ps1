@@ -20,13 +20,49 @@ function Start-ForcedUninstall {
     $targetPath = ""
     $targetFile = ""
 
+    # Unsafe system roots and shared locations that must never be targeted as an application directory
+    $unsafeRoots = @(
+        $env:USERPROFILE,
+        (Split-Path $env:USERPROFILE -Parent),
+        [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop),
+        [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonDesktopDirectory),
+        (Join-Path $env:USERPROFILE "Desktop"),
+        (Join-Path $env:USERPROFILE "Downloads"),
+        [Environment]::GetFolderPath([Environment+SpecialFolder]::Personal),
+        [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments),
+        [Environment]::GetFolderPath([Environment+SpecialFolder]::CommonDocuments),
+        (Join-Path $env:USERPROFILE "Documents"),
+        $env:TEMP,
+        $env:TMP,
+        [System.IO.Path]::GetTempPath(),
+        (Join-Path $env:SystemRoot "Temp"),
+        $env:ProgramFiles,
+        ${env:ProgramFiles(x86)},
+        $env:ProgramW6432,
+        $env:SystemRoot,
+        $env:windir,
+        $env:PUBLIC,
+        $env:ALLUSERSPROFILE,
+        $env:ProgramData
+    ) | Where-Object { $_ } | ForEach-Object { 
+        $p = $_.TrimEnd('\')
+        $p
+        try { (Get-Item -LiteralPath $p -ErrorAction SilentlyContinue).FullName.TrimEnd('\') } catch { }
+    } | Where-Object { $_ } | Select-Object -Unique
+
+    $unsafeFolderNames = @(
+        'Desktop', 'Downloads', 'Documents', 'My Documents',
+        'Temp', 'Tmp',
+        'Program Files', 'Program Files (x86)',
+        'Windows', 'Users', 'System32', 'SysWOW64'
+    )
+
     # Check if target is an existing path (directory or file)
     $cleanTarget = $Target.Trim().Trim('"', "'", ' ')
     if (Test-Path -LiteralPath $cleanTarget) {
         $item = Get-Item -LiteralPath $cleanTarget -ErrorAction SilentlyContinue
         if ($item -is [System.IO.FileInfo]) {
             $targetFile = $item.FullName
-            $targetPath = $item.FullName
             $parentDir = Split-Path $item.FullName -Parent
             $targetName = [System.IO.Path]::GetFileNameWithoutExtension($item.Name)
             try {
@@ -35,28 +71,49 @@ function Start-ForcedUninstall {
                 if ($vi.CompanyName) { $targetPublisher = $vi.CompanyName }
             } catch { }
 
-            # Two-Tier Target Qualification: Do NOT target shared root parent folders
-            $unsafeRoots = @(
-                $env:USERPROFILE,
-                [Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop),
-                [Environment]::GetFolderPath([Environment+SpecialFolder]::Personal),
-                (Join-Path $env:USERPROFILE "Downloads"),
-                $env:TEMP,
-                $env:ProgramFiles,
-                ${env:ProgramFiles(x86)},
-                $env:SystemRoot
-            ) | Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') }
+            # Two-Tier Target Qualification Protocol:
+            # Strictly refuse to target Desktop, Downloads, Documents, Temp, Program Files, Windows, Users, or any drive root.
+            $cleanParent = $parentDir.TrimEnd('\')
+            $parentResolved = try { (Get-Item -LiteralPath $parentDir -ErrorAction SilentlyContinue).FullName.TrimEnd('\') } catch { $cleanParent }
+            $isDriveRoot = ([System.IO.Path]::GetPathRoot($parentDir).TrimEnd('\') -ieq $cleanParent) -or 
+                           ([System.IO.Path]::GetPathRoot($parentDir) -eq $parentDir)
+            $parentLeaf = Split-Path $parentDir -Leaf
+            $isUnsafeName = $unsafeFolderNames -contains $parentLeaf
+            $isUnsafeParent = $isDriveRoot -or $isUnsafeName -or ($unsafeRoots | Where-Object { 
+                $_ -ieq $cleanParent -or $_ -ieq $parentResolved 
+            })
 
-            $isDriveRoot = [System.IO.Path]::GetPathRoot($parentDir).TrimEnd('\') -ieq $parentDir.TrimEnd('\')
-            $isUnsafeParent = $isDriveRoot -or ($unsafeRoots | Where-Object { $_ -ieq $parentDir.TrimEnd('\') })
-
-            $parentName = Split-Path $parentDir -Leaf
-            $nameMatches = ($targetName -and $parentName -like "*$targetName*") -or ($targetPublisher -and $parentName -like "*$targetPublisher*")
+            $nameMatches = ($targetName -and $parentLeaf -like "*$targetName*") -or 
+                           ($targetPublisher -and $parentLeaf -like "*$targetPublisher*")
 
             if (-not $isUnsafeParent -and $nameMatches) {
+                # Tier 1: Parent directory is verified as dedicated to the application
                 $targetPath = $parentDir
+            } else {
+                # Tier 2: File is in a shared, root, or unverified directory - target ONLY the file itself
+                $targetPath = ""
             }
         } else {
+            $cleanDir = $item.FullName.TrimEnd('\')
+            $dirResolved = try { (Get-Item -LiteralPath $item.FullName -ErrorAction SilentlyContinue).FullName.TrimEnd('\') } catch { $cleanDir }
+            $isDriveRoot = ([System.IO.Path]::GetPathRoot($item.FullName).TrimEnd('\') -ieq $cleanDir) -or 
+                           ([System.IO.Path]::GetPathRoot($item.FullName) -eq $item.FullName)
+            $dirLeaf = Split-Path $cleanDir -Leaf
+            $isUnsafeName = $unsafeFolderNames -contains $dirLeaf
+            $isUnsafeRoot = $isDriveRoot -or $isUnsafeName -or ($unsafeRoots | Where-Object { 
+                $_ -ieq $cleanDir -or $_ -ieq $dirResolved 
+            })
+
+            if ($isUnsafeRoot) {
+                Write-Warning "Refusing to target protected system or shared root directory '$($item.FullName)' for forced uninstallation."
+                return [PSCustomObject]@{
+                    TargetName      = $item.Name
+                    TargetPath      = $item.FullName
+                    TargetPublisher = ""
+                    Candidates      = @()
+                }
+            }
+
             $targetPath = $item.FullName
             $targetName = $item.Name
 
@@ -105,7 +162,7 @@ function Start-ForcedUninstall {
     }
 
     # 1. Primary Target Directory or File
-    if ($targetPath -and (Test-Path -LiteralPath $targetPath)) {
+    if ($targetPath -and (Test-Path -LiteralPath $targetPath -PathType Container)) {
         $seenPaths.Add($targetPath) | Out-Null
         $stat = Get-FolderSizeSafe -Path $targetPath
         $rawCandidates.Add([PSCustomObject]@{
@@ -172,7 +229,7 @@ function Start-ForcedUninstall {
 
     return [PSCustomObject]@{
         TargetName      = $targetName
-        TargetPath      = $targetPath
+        TargetPath      = if ($targetPath) { $targetPath } else { $targetFile }
         TargetPublisher = $targetPublisher
         Candidates      = [array]@($evaluated)
     }
